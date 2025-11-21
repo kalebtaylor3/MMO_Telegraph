@@ -16,6 +16,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Kismet/GameplayStatics.h"
+#include "Character/ALSPlayerController.h"
 #include "TimerManager.h"
 #include "Net/UnrealNetwork.h"
 
@@ -1018,6 +1019,38 @@ void AALSBaseCharacter::UpdateCharacterMovement()
 
 void AALSBaseCharacter::UpdateGroundedRotation(float DeltaTime)
 {
+	// If our controller is doing free look, we don't want camera yaw
+	// to drive character rotation like normal ALS does.
+	AALSPlayerController* ALSPC = Cast<AALSPlayerController>(GetController());
+	const bool bIsFreeLookActive = (ALSPC && ALSPC->IsFreeLook());
+
+	if (bIsFreeLookActive)
+	{
+		if (MovementAction == EALSMovementAction::None)
+		{
+			// Optional: still allow rotation to follow velocity if needed,
+			// but since movement is already based on actor forward during free look,
+			// this usually ends up as a no-op and keeps the facing stable.
+			const bool bCanUpdateMovingRot =
+				((bIsMoving && bHasMovementInput) || Speed > 150.0f) && !HasAnyRootMotion();
+
+			if (bCanUpdateMovingRot)
+			{
+				const float GroundedRotationRate = CalculateGroundedRotationRate();
+				SmoothCharacterRotation(
+					FRotator(0.0f, LastVelocityRotation.Yaw, 0.0f),
+					800.0f,
+					GroundedRotationRate,
+					DeltaTime);
+			}
+		}
+
+		// Don't run the normal ALS camera-driven rotation below
+		return;
+	}
+
+	// ---------- ORIGINAL ALS LOGIC (unchanged) ----------
+
 	if (MovementAction == EALSMovementAction::None)
 	{
 		const bool bCanUpdateMovingRot = ((bIsMoving && bHasMovementInput) || Speed > 150.0f) && !HasAnyRootMotion();
@@ -1027,8 +1060,8 @@ void AALSBaseCharacter::UpdateGroundedRotation(float DeltaTime)
 			if (RotationMode == EALSRotationMode::VelocityDirection)
 			{
 				// Velocity Direction Rotation
-				SmoothCharacterRotation({0.0f, LastVelocityRotation.Yaw, 0.0f}, 800.0f, GroundedRotationRate,
-				                        DeltaTime);
+				SmoothCharacterRotation({ 0.0f, LastVelocityRotation.Yaw, 0.0f }, 800.0f, GroundedRotationRate,
+					DeltaTime);
 			}
 			else if (RotationMode == EALSRotationMode::LookingDirection)
 			{
@@ -1044,12 +1077,12 @@ void AALSBaseCharacter::UpdateGroundedRotation(float DeltaTime)
 					const float YawOffsetCurveVal = GetAnimCurveValue(NAME_YawOffset);
 					YawValue = AimingRotation.Yaw + YawOffsetCurveVal;
 				}
-				SmoothCharacterRotation({0.0f, YawValue, 0.0f}, 500.0f, GroundedRotationRate, DeltaTime);
+				SmoothCharacterRotation({ 0.0f, YawValue, 0.0f }, 500.0f, GroundedRotationRate, DeltaTime);
 			}
 			else if (RotationMode == EALSRotationMode::Aiming)
 			{
 				const float ControlYaw = AimingRotation.Yaw;
-				SmoothCharacterRotation({0.0f, ControlYaw, 0.0f}, 1000.0f, 20.0f, DeltaTime);
+				SmoothCharacterRotation({ 0.0f, ControlYaw, 0.0f }, 1000.0f, 20.0f, DeltaTime);
 			}
 		}
 		else
@@ -1063,9 +1096,6 @@ void AALSBaseCharacter::UpdateGroundedRotation(float DeltaTime)
 			}
 
 			// Apply the RotationAmount curve from Turn In Place Animations.
-			// The Rotation Amount curve defines how much rotation should be applied each frame,
-			// and is calculated for animations that are animated at 30fps.
-
 			const float RotAmountCurve = GetAnimCurveValue(NAME_RotationAmount);
 
 			if (FMath::Abs(RotAmountCurve) > 0.001f)
@@ -1078,7 +1108,7 @@ void AALSBaseCharacter::UpdateGroundedRotation(float DeltaTime)
 				}
 				else
 				{
-					AddActorWorldRotation({0, RotAmountCurve * (DeltaTime / (1.0f / 30.0f)), 0});
+					AddActorWorldRotation({ 0, RotAmountCurve * (DeltaTime / (1.0f / 30.0f)), 0 });
 				}
 				TargetRotation = GetActorRotation();
 			}
@@ -1089,12 +1119,13 @@ void AALSBaseCharacter::UpdateGroundedRotation(float DeltaTime)
 		// Rolling Rotation (Not allowed on networked games)
 		if (!bEnableNetworkOptimizations && bHasMovementInput)
 		{
-			SmoothCharacterRotation({0.0f, LastMovementInputRotation.Yaw, 0.0f}, 0.0f, 2.0f, DeltaTime);
+			SmoothCharacterRotation({ 0.0f, LastMovementInputRotation.Yaw, 0.0f }, 0.0f, 2.0f, DeltaTime);
 		}
 	}
 
 	// Other actions are ignored...
 }
+
 
 void AALSBaseCharacter::UpdateInAirRotation(float DeltaTime)
 {
@@ -1207,8 +1238,29 @@ void AALSBaseCharacter::ForwardMovementAction_Implementation(float Value)
 {
 	if (MovementState == EALSMovementState::Grounded || MovementState == EALSMovementState::InAir)
 	{
-		// Default camera relative movement behavior
-		const FRotator DirRotator(0.0f, AimingRotation.Yaw, 0.0f);
+		FRotator DirRotator;
+
+		// If our controller is the ALS player controller, check free look state
+		if (AALSPlayerController* ALSPC = Cast<AALSPlayerController>(GetController()))
+		{
+			if (ALSPC->IsFreeLook())
+			{
+				// FREE LOOK: move relative to character facing, not camera
+				const FRotator ActorRot = GetActorRotation();
+				DirRotator = FRotator(0.0f, ActorRot.Yaw, 0.0f);
+			}
+			else
+			{
+				// Normal: camera-relative movement as ALS does by default
+				DirRotator = FRotator(0.0f, AimingRotation.Yaw, 0.0f);
+			}
+		}
+		else
+		{
+			// Fallback: default ALS behaviour
+			DirRotator = FRotator(0.0f, AimingRotation.Yaw, 0.0f);
+		}
+
 		AddMovementInput(UKismetMathLibrary::GetForwardVector(DirRotator), Value);
 	}
 }
@@ -1217,11 +1269,30 @@ void AALSBaseCharacter::RightMovementAction_Implementation(float Value)
 {
 	if (MovementState == EALSMovementState::Grounded || MovementState == EALSMovementState::InAir)
 	{
-		// Default camera relative movement behavior
-		const FRotator DirRotator(0.0f, AimingRotation.Yaw, 0.0f);
+		FRotator DirRotator;
+
+		if (AALSPlayerController* ALSPC = Cast<AALSPlayerController>(GetController()))
+		{
+			if (ALSPC->IsFreeLook())
+			{
+				// FREE LOOK: strafing also locked to character facing
+				const FRotator ActorRot = GetActorRotation();
+				DirRotator = FRotator(0.0f, ActorRot.Yaw, 0.0f);
+			}
+			else
+			{
+				DirRotator = FRotator(0.0f, AimingRotation.Yaw, 0.0f);
+			}
+		}
+		else
+		{
+			DirRotator = FRotator(0.0f, AimingRotation.Yaw, 0.0f);
+		}
+
 		AddMovementInput(UKismetMathLibrary::GetRightVector(DirRotator), Value);
 	}
 }
+
 
 void AALSBaseCharacter::CameraUpAction_Implementation(float Value)
 {

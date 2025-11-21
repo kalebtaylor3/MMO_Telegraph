@@ -28,6 +28,9 @@ public:
 
 	virtual void BindActions(UInputMappingContext* Context);
 
+	UFUNCTION(BlueprintCallable, Category = "MMO Camera")
+	bool IsFreeLook() const { return bIsFreeLook; }
+
 protected:
 	void SetupInputs();
 
