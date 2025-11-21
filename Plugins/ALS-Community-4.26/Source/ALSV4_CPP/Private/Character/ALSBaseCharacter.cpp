@@ -127,6 +127,33 @@ void AALSBaseCharacter::Tick(float DeltaTime)
 	// Set required values
 	SetEssentialValues(DeltaTime);
 
+	// --- NEW: handle free-look movement direction lock ---
+	AALSPlayerController* ALSPC = Cast<AALSPlayerController>(GetController());
+	const bool bIsFreeLook = (ALSPC && ALSPC->IsFreeLook());
+
+	if (bIsFreeLook && !bFreeLookDirectionLocked)
+	{
+		// Free look just started – lock movement direction
+		if (bIsMoving)
+		{
+			// Use current velocity direction if we're already moving
+			FreeLookDirectionYaw = LastVelocityRotation.Yaw;
+		}
+		else
+		{
+			// Otherwise just use current facing
+			FreeLookDirectionYaw = GetActorRotation().Yaw;
+		}
+
+		bFreeLookDirectionLocked = true;
+	}
+	else if (!bIsFreeLook && bFreeLookDirectionLocked)
+	{
+		// Free look ended – unlock
+		bFreeLookDirectionLocked = false;
+	}
+	// --- END NEW ---
+
 	if (MovementState == EALSMovementState::Grounded)
 	{
 		UpdateCharacterMovement();
@@ -559,7 +586,7 @@ bool AALSBaseCharacter::CanSprint() const
 	// (input) rotation. If the character is in the Looking Rotation mode, only allow sprinting if there is full
 	// movement input and it is faced forward relative to the camera + or - 50 degrees.
 
-	if (!bHasMovementInput || RotationMode == EALSRotationMode::Aiming)
+	/*if (!bHasMovementInput || RotationMode == EALSRotationMode::Aiming)
 	{
 		return false;
 	}
@@ -578,10 +605,11 @@ bool AALSBaseCharacter::CanSprint() const
 		Delta.Normalize();
 
 		return bValidInputAmount && FMath::Abs(Delta.Yaw) < 50.0f;
-	}
+	}*/
 
-	return false;
+	return true;
 }
+
 
 FVector AALSBaseCharacter::GetMovementInput() const
 {
@@ -1024,6 +1052,12 @@ void AALSBaseCharacter::UpdateGroundedRotation(float DeltaTime)
 	AALSPlayerController* ALSPC = Cast<AALSPlayerController>(GetController());
 	const bool bIsFreeLookActive = (ALSPC && ALSPC->IsFreeLook());
 
+	if (bFreeLookDirectionLocked)
+	{
+		return;
+	}
+
+
 	if (bIsFreeLookActive)
 	{
 		if (MovementAction == EALSMovementAction::None)
@@ -1150,14 +1184,11 @@ EALSGait AALSBaseCharacter::GetAllowedGait() const
 
 	if (Stance == EALSStance::Standing)
 	{
-		if (RotationMode != EALSRotationMode::Aiming)
+		if (DesiredGait == EALSGait::Sprinting)
 		{
-			if (DesiredGait == EALSGait::Sprinting)
-			{
-				return CanSprint() ? EALSGait::Sprinting : EALSGait::Running;
-			}
-			return DesiredGait;
+			return CanSprint() ? EALSGait::Sprinting : EALSGait::Running;
 		}
+		return DesiredGait;
 	}
 
 	// Crouching stance & Aiming rot mode has same behaviour
@@ -1240,24 +1271,14 @@ void AALSBaseCharacter::ForwardMovementAction_Implementation(float Value)
 	{
 		FRotator DirRotator;
 
-		// If our controller is the ALS player controller, check free look state
-		if (AALSPlayerController* ALSPC = Cast<AALSPlayerController>(GetController()))
+		if (bFreeLookDirectionLocked)
 		{
-			if (ALSPC->IsFreeLook())
-			{
-				// FREE LOOK: move relative to character facing, not camera
-				const FRotator ActorRot = GetActorRotation();
-				DirRotator = FRotator(0.0f, ActorRot.Yaw, 0.0f);
-			}
-			else
-			{
-				// Normal: camera-relative movement as ALS does by default
-				DirRotator = FRotator(0.0f, AimingRotation.Yaw, 0.0f);
-			}
+			// Free look: move relative to locked world direction
+			DirRotator = FRotator(0.0f, FreeLookDirectionYaw, 0.0f);
 		}
 		else
 		{
-			// Fallback: default ALS behaviour
+			// Default ALS: camera-relative movement
 			DirRotator = FRotator(0.0f, AimingRotation.Yaw, 0.0f);
 		}
 
@@ -1271,27 +1292,21 @@ void AALSBaseCharacter::RightMovementAction_Implementation(float Value)
 	{
 		FRotator DirRotator;
 
-		if (AALSPlayerController* ALSPC = Cast<AALSPlayerController>(GetController()))
+		if (bFreeLookDirectionLocked)
 		{
-			if (ALSPC->IsFreeLook())
-			{
-				// FREE LOOK: strafing also locked to character facing
-				const FRotator ActorRot = GetActorRotation();
-				DirRotator = FRotator(0.0f, ActorRot.Yaw, 0.0f);
-			}
-			else
-			{
-				DirRotator = FRotator(0.0f, AimingRotation.Yaw, 0.0f);
-			}
+			// Free look: strafe relative to locked world direction
+			DirRotator = FRotator(0.0f, FreeLookDirectionYaw, 0.0f);
 		}
 		else
 		{
+			// Default ALS: camera-relative movement
 			DirRotator = FRotator(0.0f, AimingRotation.Yaw, 0.0f);
 		}
 
 		AddMovementInput(UKismetMathLibrary::GetRightVector(DirRotator), Value);
 	}
 }
+
 
 
 void AALSBaseCharacter::CameraUpAction_Implementation(float Value)

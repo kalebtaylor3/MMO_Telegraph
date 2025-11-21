@@ -459,6 +459,12 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "ALS|Camera System")
 	bool bRightShoulder = false;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MMO|FreeLook")
+	bool bFreeLookDirectionLocked = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MMO|FreeLook")
+	float FreeLookDirectionYaw = 0.0f;
+
 	/** Movement System */
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ALS|Movement System")
