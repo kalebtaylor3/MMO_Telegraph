@@ -44,35 +44,6 @@ void AMMOPlayerController::BeginPlay()
 	}
 }
 
-void AMMOPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
-{
-	if (HasAuthority()) // server side only
-	{
-		AMMOPlayerState* PS = GetPlayerState<AMMOPlayerState>();
-		APawn* MyPawn = GetPawn();
-
-		if (PS && MyPawn)
-		{
-			const FString& Username = PS->GetAccountUsername();
-
-			if (!Username.IsEmpty())
-			{
-				UGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
-				UMMOAccountStorage* Storage = GI ? GI->GetSubsystem<UMMOAccountStorage>() : nullptr;
-
-				if (Storage)
-				{
-					const FVector Loc = MyPawn->GetActorLocation();
-					Storage->UpdateLastLocation(Username, Loc);
-				}
-			}
-		}
-	}
-
-	Super::EndPlay(EndPlayReason);
-}
-
-
 void AMMOPlayerController::SetCharacterProfile(
 	const FString& InName,
 	int32               InLevel,
@@ -198,6 +169,17 @@ void AMMOPlayerController::ServerLogin_Implementation(const FString& Username, c
 
 	if (AMMOPlayerCharacter* MMOChar = Cast<AMMOPlayerCharacter>(GetPawn()))
 	{
+
+		if (Profile.bHasSavedLocation)
+		{
+			// Teleport directly to last location
+			MMOChar->SetActorLocation(
+				Profile.LastLocation,
+				false,              // bSweep
+				nullptr,
+				ETeleportType::TeleportPhysics);
+		}
+
 		MMOChar->SetHiddenForLogin(false);
 		MMOChar->RefreshCharacterModelFromState();
 

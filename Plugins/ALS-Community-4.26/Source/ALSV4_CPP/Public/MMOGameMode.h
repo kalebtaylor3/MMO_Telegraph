@@ -17,5 +17,15 @@ class ALSV4_CPP_API AMMOGameMode : public AGameModeBase
 public:
 	// Called on SERVER whenever a player leaves / disconnects
 	virtual void Logout(AController* Exiting) override;
+
+
+	// Called once on server when world starts
+	virtual void BeginPlay() override;
+
+private:
+	FTimerHandle AutosaveTimerHandle;
+
+	// Called periodically on the server to save all players' locations
+	void AutosaveAllPlayers();
 	
 };

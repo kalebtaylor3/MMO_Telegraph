@@ -21,7 +21,6 @@ class ALSV4_CPP_API AMMOPlayerController : public AALSPlayerController
 public:
 
 	virtual void BeginPlay() override;
-	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	UFUNCTION(Exec)
 	void SetNameCommand(const FString& NewName);
