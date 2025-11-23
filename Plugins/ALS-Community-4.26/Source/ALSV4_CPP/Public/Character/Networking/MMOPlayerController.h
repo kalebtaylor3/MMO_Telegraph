@@ -21,6 +21,7 @@ class ALSV4_CPP_API AMMOPlayerController : public AALSPlayerController
 public:
 
 	virtual void BeginPlay() override;
+	virtual void PlayerTick(float DeltaSeconds) override;
 
 	UFUNCTION(Exec)
 	void SetNameCommand(const FString& NewName);
@@ -75,4 +76,26 @@ protected:
 
 	UFUNCTION(Client, Reliable)
 	void ClientOnCreateAccountResult(bool bSuccess, const FString& ErrorMessage);
+
+	// === HOVER HIGHLIGHT ===
+
+	/** Current actor under the mouse (for this client only) */
+	UPROPERTY()
+	AActor* CurrentHoverActor = nullptr;
+
+	/** MPC used by the post-process outline material */
+	UPROPERTY(EditDefaultsOnly, Category = "MMO|Highlight")
+	UMaterialParameterCollection* HighlightMPC;
+
+	/** Called each frame on the local client to update hover highlighting */
+	void UpdateHoverHighlight(float DeltaSeconds);
+
+	/** Clear highlight from CurrentHoverActor */
+	void ClearHoverHighlight();
+
+	/** Apply highlight to this actor (and set CurrentHoverActor) */
+	void ApplyHighlightToActor(AActor* NewActor);
+
+	/** Set MPC outline color based on actor type (enemy/player/npc) */
+	void SetOutlineColorForActor(AActor* Actor);
 };

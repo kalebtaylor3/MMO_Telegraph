@@ -8,7 +8,12 @@
 #include "Server/MMOAccountStorage.h"
 #include "Engine/GameInstance.h"
 #include "Engine/Engine.h" // for GEngine
+#include "Engine/EngineTypes.h"
 #include "GameFramework/Pawn.h"
+#include "Enemy/MMOMobCharacter.h" 
+#include "Materials/MaterialParameterCollection.h"
+#include "Materials/MaterialParameterCollectionInstance.h"
+#include "Engine/World.h"
 #include "Character/Networking/MMOPlayerState.h"
 
 void AMMOPlayerController::BeginPlay()
@@ -306,3 +311,198 @@ void AMMOPlayerController::ClientOnCreateAccountResult_Implementation(bool bSucc
 	SetInputMode(InputMode);
 	bShowMouseCursor = false;
 }
+
+void AMMOPlayerController::PlayerTick(float DeltaSeconds)
+{
+	Super::PlayerTick(DeltaSeconds);
+
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	UpdateHoverHighlight(DeltaSeconds);
+}
+
+void AMMOPlayerController::UpdateHoverHighlight(float DeltaSeconds)
+{
+	// Don’t hover if we don’t have a mouse, or while doing certain actions if you like
+	if (!bShowMouseCursor)
+	{
+		// Optional: when mouse cursor is hidden (e.g. right-click camera rotate),
+		// we can clear highlight so nothing glows.
+		ClearHoverHighlight();
+		return;
+	}
+
+	// Trace under cursor
+	FHitResult Hit;
+
+	// Convert the collision channel to a trace type query
+	ETraceTypeQuery TraceChannel = UEngineTypes::ConvertToTraceType(ECC_Visibility);
+
+	const bool bHit = GetHitResultUnderCursorByChannel(TraceChannel, false, Hit);
+
+	AActor* NewHoverActor = nullptr;
+
+	if (bHit && Hit.GetActor())
+	{
+		AActor* HitActor = Hit.GetActor();
+
+		// Don't highlight our own pawn
+		if (HitActor != GetPawn())
+		{
+			// Only consider known MMO actors for now (players/enemies)
+			if (Cast<AMMOMobCharacter>(HitActor) ||
+				Cast<AMMOPlayerCharacter>(HitActor))
+			{
+				NewHoverActor = HitActor;
+			}
+		}
+	}
+
+	// If nothing valid under cursor, clear if needed
+	if (!NewHoverActor)
+	{
+		if (CurrentHoverActor)
+		{
+			ClearHoverHighlight();
+		}
+		return;
+	}
+
+	// If same as last frame, do nothing
+	if (NewHoverActor == CurrentHoverActor)
+	{
+		return;
+	}
+
+	// Actor changed: clear old and apply new
+	ClearHoverHighlight();
+	ApplyHighlightToActor(NewHoverActor);
+}
+
+void AMMOPlayerController::ClearHoverHighlight()
+{
+	if (!CurrentHoverActor)
+	{
+		return;
+	}
+
+	if (ACharacter* Char = Cast<ACharacter>(CurrentHoverActor))
+	{
+		// Player
+		if (AMMOPlayerCharacter* MMOPlayer = Cast<AMMOPlayerCharacter>(Char))
+		{
+			if (USkeletalMeshComponent* Overlay = MMOPlayer->GetHighlightMesh())
+			{
+				//Overlay->SetRenderCustomDepth(false);
+				// Optional: reset stencil
+				Overlay->SetCustomDepthStencilValue(0);
+			}
+		}
+		// Mob / enemy
+		else if (AMMOMobCharacter* Mob = Cast<AMMOMobCharacter>(Char))
+		{
+			if (USkeletalMeshComponent* MobMesh = Mob->GetHighlightMesh())
+			{
+				//MobMesh->SetRenderCustomDepth(false);
+				MobMesh->SetCustomDepthStencilValue(0);
+			}
+		}
+	}
+	else
+	{
+		// Non-character fallback
+		TArray<USkeletalMeshComponent*> Meshes;
+		CurrentHoverActor->GetComponents(Meshes);
+		for (USkeletalMeshComponent* MeshComp : Meshes)
+		{
+			if (MeshComp)
+			{
+				MeshComp->SetRenderCustomDepth(false);
+				MeshComp->SetCustomDepthStencilValue(0);
+			}
+		}
+	}
+
+	CurrentHoverActor = nullptr;
+}
+
+void AMMOPlayerController::ApplyHighlightToActor(AActor* NewActor)
+{
+	if (!NewActor)
+	{
+		return;
+	}
+
+	if (NewActor == GetPawn())
+	{
+		return;
+	}
+
+	if (ACharacter* Char = Cast<ACharacter>(NewActor))
+	{
+		// Player
+		if (AMMOPlayerCharacter* MMOPlayer = Cast<AMMOPlayerCharacter>(Char))
+		{
+			if (USkeletalMeshComponent* Overlay = MMOPlayer->GetHighlightMesh())
+			{
+				Overlay->SetRenderCustomDepth(true);
+				Overlay->SetCustomDepthStencilValue(1); // e.g. blue in PP material
+			}
+		}
+		// Mob / enemy
+		else if (AMMOMobCharacter* Mob = Cast<AMMOMobCharacter>(Char))
+		{
+			if (USkeletalMeshComponent* MobMesh = Mob->GetHighlightMesh())
+			{
+				MobMesh->SetRenderCustomDepth(true);
+				MobMesh->SetCustomDepthStencilValue(2); // e.g. red in PP material
+			}
+		}
+	}
+
+	// This can now just decide color based on class type and stencil:
+	SetOutlineColorForActor(NewActor);
+
+	CurrentHoverActor = NewActor;
+}
+
+
+void AMMOPlayerController::SetOutlineColorForActor(AActor* Actor)
+{
+	if (!HighlightMPC || !GetWorld())
+	{
+		return;
+	}
+
+	UMaterialParameterCollectionInstance* Inst =
+		GetWorld()->GetParameterCollectionInstance(HighlightMPC);
+
+	if (!Inst)
+	{
+		return;
+	}
+
+	FLinearColor Color = FLinearColor::White;
+
+	if (Cast<AMMOMobCharacter>(Actor))
+	{
+		// Enemy = red
+		Color = FLinearColor(1.f, 0.f, 0.f);
+	}
+	else if (Cast<AMMOPlayerCharacter>(Actor))
+	{
+		// Other players = blue
+		Color = FLinearColor(0.1f, 0.4f, 1.f);
+	}
+	// else if (Cast<AMMONPCCharacter>(Actor))
+	// {
+	//     // NPC = green (future)
+	//     Color = FLinearColor(0.1f, 1.f, 0.3f);
+	// }
+
+	Inst->SetVectorParameterValue(FName("OutlineColor"), Color);
+}
+

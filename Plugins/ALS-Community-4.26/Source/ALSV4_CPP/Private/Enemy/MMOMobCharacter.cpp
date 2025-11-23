@@ -1,4 +1,4 @@
-#include "Enemy/MMOMobCharacter.h"   // adjust path if needed
+#include "Enemy/MMOMobCharacter.h" 
 
 #include "Components/SphereComponent.h"
 #include "Enemy/MMOMobAIController.h"
@@ -22,6 +22,12 @@ AMMOMobCharacter::AMMOMobCharacter(const FObjectInitializer& ObjectInitializer)
 	AggroSphere->SetCollisionResponseToAllChannels(ECR_Ignore);
 	AggroSphere->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
 	AggroSphere->SetGenerateOverlapEvents(true);
+
+	CharacterOverlayMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("CharacterOverlayMesh"));
+	CharacterOverlayMesh->SetupAttachment(GetMesh());
+	CharacterOverlayMesh->SetRelativeLocation(FVector::ZeroVector);
+	CharacterOverlayMesh->SetRelativeRotation(FRotator::ZeroRotator);
+	CharacterOverlayMesh->SetRelativeScale3D(FVector::OneVector);
 }
 
 void AMMOMobCharacter::BeginPlay()
@@ -43,6 +49,11 @@ void AMMOMobCharacter::BeginPlay()
 	AggroSphere->SetCollisionResponseToAllChannels(ECR_Ignore);
 	AggroSphere->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
 	AggroSphere->SetGenerateOverlapEvents(true);
+
+	if (CharacterOverlayMesh && GetMesh())
+	{
+		CharacterOverlayMesh->SetLeaderPoseComponent(GetMesh());
+	}
 
 	// Bind overlap
 	AggroSphere->OnComponentBeginOverlap.AddDynamic(

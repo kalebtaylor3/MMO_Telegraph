@@ -31,6 +31,8 @@ public:
 	// Called from PlayerState when model changes (server + clients)
 	void RefreshCharacterModelFromState();
 
+	USkeletalMeshComponent* GetHighlightMesh() const { return CharacterOverlayMesh; }
+
 protected:
 	// World-space widget over the head
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI")

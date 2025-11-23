@@ -59,6 +59,11 @@ public:
 	/** Helper for BT / controller */
 	void SetAIState(EMMOMobAIState NewState);
 
+	USkeletalMeshComponent* GetHighlightMesh() const { return CharacterOverlayMesh; }
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MMO|Visual")
+	USkeletalMeshComponent* CharacterOverlayMesh;
+
 protected:
 	UFUNCTION()
 	void OnAggroSphereBeginOverlap(
