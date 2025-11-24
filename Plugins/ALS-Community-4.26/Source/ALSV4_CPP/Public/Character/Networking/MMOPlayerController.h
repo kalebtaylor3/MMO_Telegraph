@@ -4,11 +4,13 @@
 #include "Character/ALSPlayerController.h"
 #include "Character/Networking/MMOPlayerState.h"
 #include "Character/Networking/MMOSharedTypes.h"
+#include "Character/MMOSelectionCircle.h"
 #include "MMOPlayerController.generated.h"
 
 class AMMOPlayerState;
 class UMMOLoginWidget;
 class UMMOCharacterCreationWidget;
+class UInputAction;
 
 /**
  * MMO-style player controller that can configure character profile on the server.
@@ -22,6 +24,7 @@ public:
 
 	virtual void BeginPlay() override;
 	virtual void PlayerTick(float DeltaSeconds) override;
+	virtual void SetupInputComponent() override;
 
 	UFUNCTION(Exec)
 	void SetNameCommand(const FString& NewName);
@@ -49,6 +52,8 @@ public:
 
 protected:
 
+	UPROPERTY(EditDefaultsOnly, Category = "MMO|Input")
+	UInputAction* SelectAction;
 
 	UPROPERTY(EditDefaultsOnly, Category = "MMO|UI")
 	TSubclassOf<UMMOLoginWidget> LoginWidgetClass;
@@ -83,6 +88,15 @@ protected:
 	UPROPERTY()
 	AActor* CurrentHoverActor = nullptr;
 
+	UPROPERTY()
+	AActor* CurrentSelectedActor = nullptr;
+
+	UPROPERTY(EditDefaultsOnly, Category = "MMO|Selection")
+	TSubclassOf<class AMMOSelectionCircle> SelectionCircleClass;
+
+	UPROPERTY()
+	AMMOSelectionCircle* SelectionCircle = nullptr;
+
 	/** MPC used by the post-process outline material */
 	UPROPERTY(EditDefaultsOnly, Category = "MMO|Highlight")
 	UMaterialParameterCollection* HighlightMPC;
@@ -98,4 +112,11 @@ protected:
 
 	/** Set MPC outline color based on actor type (enemy/player/npc) */
 	void SetOutlineColorForActor(AActor* Actor);
+
+	// Input handlers
+	void HandleSelectPressed();
+
+	// Selection helpers
+	void ClearSelection();
+	void ApplySelectionToActor(AActor* NewSelection);
 };

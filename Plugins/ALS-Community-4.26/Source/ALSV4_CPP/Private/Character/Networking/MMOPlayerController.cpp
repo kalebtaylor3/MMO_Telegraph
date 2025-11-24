@@ -14,6 +14,8 @@
 #include "Materials/MaterialParameterCollection.h"
 #include "Materials/MaterialParameterCollectionInstance.h"
 #include "Engine/World.h"
+#include "InputAction.h"
+#include "EnhancedInputComponent.h"
 #include "Character/Networking/MMOPlayerState.h"
 
 void AMMOPlayerController::BeginPlay()
@@ -46,6 +48,25 @@ void AMMOPlayerController::BeginPlay()
 	if (AMMOPlayerCharacter* MMOChar = Cast<AMMOPlayerCharacter>(GetPawn()))
 	{
 		MMOChar->SetHiddenForLogin(true);
+	}
+}
+
+void AMMOPlayerController::SetupInputComponent()
+{
+	// Let ALS do all its setup first (clears + binds movement, camera, etc.)
+	Super::SetupInputComponent();
+
+	// Now add our extra binding on top
+	if (UEnhancedInputComponent* EIC = Cast<UEnhancedInputComponent>(InputComponent))
+	{
+		if (SelectAction)
+		{
+			EIC->BindAction(
+				SelectAction,
+				ETriggerEvent::Started,  // or Completed, depending how you want click to behave
+				this,
+				&AMMOPlayerController::HandleSelectPressed);
+		}
 	}
 }
 
@@ -505,4 +526,104 @@ void AMMOPlayerController::SetOutlineColorForActor(AActor* Actor)
 
 	Inst->SetVectorParameterValue(FName("OutlineColor"), Color);
 }
+
+void AMMOPlayerController::HandleSelectPressed()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	// Use whatever the hover system found
+	AActor* Target = CurrentHoverActor;
+
+	// Clicked empty space -> clear selection
+	if (!Target)
+	{
+		ClearSelection();
+		return;
+	}
+
+	// Clicking the same target again: either ignore or deselect.
+	// For now we'll just keep it selected.
+	if (Target == CurrentSelectedActor)
+	{
+		return;
+	}
+
+	ClearSelection();
+	ApplySelectionToActor(Target);
+}
+
+void AMMOPlayerController::ClearSelection()
+{
+	CurrentSelectedActor = nullptr;
+
+	if (SelectionCircle)
+	{
+		SelectionCircle->DetachFromActor(
+			FDetachmentTransformRules::KeepWorldTransform);
+		SelectionCircle->SetActive(false);
+	}
+}
+
+void AMMOPlayerController::ApplySelectionToActor(AActor* NewSelection)
+{
+	if (!NewSelection || !GetWorld())
+	{
+		return;
+	}
+
+	CurrentSelectedActor = NewSelection;
+
+	// Lazily spawn the ring the first time we select something
+	if (!SelectionCircle && SelectionCircleClass)
+	{
+		FActorSpawnParameters Params;
+		Params.Owner = this;
+		Params.SpawnCollisionHandlingOverride =
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+		SelectionCircle = GetWorld()->SpawnActor<AMMOSelectionCircle>(
+			SelectionCircleClass,
+			FVector::ZeroVector,
+			FRotator::ZeroRotator
+		);
+	}
+
+	if (!SelectionCircle)
+	{
+		return;
+	}
+
+	// Decide ring color based on actor type
+	FLinearColor Color = FLinearColor::White;
+
+	if (Cast<AMMOMobCharacter>(NewSelection))
+	{
+		// Enemy: red (matches your outline)
+		Color = FLinearColor(1.f, 0.f, 0.f);
+	}
+	else if (Cast<AMMOPlayerCharacter>(NewSelection))
+	{
+		// Other players: blue
+		Color = FLinearColor(0.1f, 0.4f, 1.f);
+	}
+	// TODO later: NPC = green, interactable = yellow, etc.
+
+	SelectionCircle->SetColor(Color);
+
+	// Attach circle to the selected actor’s root, sitting on the ground
+	SelectionCircle->AttachToActor(
+		NewSelection,
+		FAttachmentTransformRules::KeepRelativeTransform);
+
+	// Optional Z offset if your capsule origin is mid-body:
+	FVector LocalOffset = FVector::ZeroVector;
+	LocalOffset.Z = -90.f; // tweak for your meshes
+	SelectionCircle->SetActorRelativeLocation(LocalOffset);
+
+	SelectionCircle->SetActive(true);
+}
+
 
