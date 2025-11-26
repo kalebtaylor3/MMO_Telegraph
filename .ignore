@@ -1,0 +1,26 @@
+# Meta / tooling
+/.git
+/.vs
+/.vscode
+
+# Unreal Engine installs (EDIT these to match your folder names)
+/UE_5*/
+/UnrealEngine*/
+/UE_5.4/      # <-- change or remove if your engine folder is named differently
+
+# Unreal project generated stuff
+/DerivedDataCache
+/Intermediate
+/Saved
+/Binaries
+
+# ALS plugin heavy stuff (keep code, ignore junk)
+/Plugins/ALS-Community-4.26/.github
+/Plugins/ALS-Community-4.26/Content
+/Plugins/ALS-Community-4.26/Intermediate
+
+# (Optional) If you really never want Augment looking at assets, uncomment:
+/Content
+
+# IMPORTANT: do NOT ignore your own project folder
+# /MMO-Style-Networked-Telegraph---Ability-System   <-- DELETE this line if it exists

@@ -1,3 +1,4 @@
+
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
@@ -347,7 +348,7 @@ void AMMOPlayerController::PlayerTick(float DeltaSeconds)
 
 void AMMOPlayerController::UpdateHoverHighlight(float DeltaSeconds)
 {
-	// Don’t hover if we don’t have a mouse, or while doing certain actions if you like
+	// Donï¿½t hover if we donï¿½t have a mouse, or while doing certain actions if you like
 	if (!bShowMouseCursor)
 	{
 		// Optional: when mouse cursor is hidden (e.g. right-click camera rotate),
@@ -403,50 +404,34 @@ void AMMOPlayerController::UpdateHoverHighlight(float DeltaSeconds)
 	ApplyHighlightToActor(NewHoverActor);
 }
 
-void AMMOPlayerController::ClearHoverHighlight()
-{
-	if (!CurrentHoverActor)
-	{
-		return;
+void AMMOPlayerController::ClearHoverHighlight() {
+	if (!CurrentHoverActor) { return; }
+	if (CurrentHoverActor == CurrentSelectedActor) 
+	{ 
+		CurrentHoverActor = nullptr; return; 
 	}
-
-	if (ACharacter* Char = Cast<ACharacter>(CurrentHoverActor))
+	if (ACharacter* Char = Cast<ACharacter>(CurrentHoverActor)) 
 	{
-		// Player
-		if (AMMOPlayerCharacter* MMOPlayer = Cast<AMMOPlayerCharacter>(Char))
-		{
-			if (USkeletalMeshComponent* Overlay = MMOPlayer->GetHighlightMesh())
-			{
-				//Overlay->SetRenderCustomDepth(false);
-				// Optional: reset stencil
-				Overlay->SetCustomDepthStencilValue(0);
-			}
+		if (AMMOPlayerCharacter* MMOPlayer = Cast<AMMOPlayerCharacter>(Char)) 
+		{ 
+			if (USkeletalMeshComponent* Overlay = MMOPlayer->GetHighlightMesh()) 
+			{ 
+				Overlay->SetCustomDepthStencilValue(0); 
+			} 
 		}
-		// Mob / enemy
-		else if (AMMOMobCharacter* Mob = Cast<AMMOMobCharacter>(Char))
-		{
-			if (USkeletalMeshComponent* MobMesh = Mob->GetHighlightMesh())
-			{
-				//MobMesh->SetRenderCustomDepth(false);
-				MobMesh->SetCustomDepthStencilValue(0);
-			}
-		}
+		else if (AMMOMobCharacter* Mob = Cast<AMMOMobCharacter>(Char)) { if (USkeletalMeshComponent* MobMesh = Mob->GetHighlightMesh()) { MobMesh->SetCustomDepthStencilValue(0); } }
+	} 
+	else 
+	{ 
+		TArray<USkeletalMeshComponent*> Meshes; CurrentHoverActor->GetComponents(Meshes); 
+		for (USkeletalMeshComponent* MeshComp : Meshes) 
+		{ 
+			if (MeshComp) 
+			{ MeshComp->SetRenderCustomDepth(false); 
+				MeshComp->SetCustomDepthStencilValue(0); 
+			} 
+		} 
 	}
-	else
-	{
-		// Non-character fallback
-		TArray<USkeletalMeshComponent*> Meshes;
-		CurrentHoverActor->GetComponents(Meshes);
-		for (USkeletalMeshComponent* MeshComp : Meshes)
-		{
-			if (MeshComp)
-			{
-				MeshComp->SetRenderCustomDepth(false);
-				MeshComp->SetCustomDepthStencilValue(0);
-			}
-		}
-	}
-
 	CurrentHoverActor = nullptr;
 }
 
@@ -555,16 +540,40 @@ void AMMOPlayerController::HandleSelectPressed()
 	ApplySelectionToActor(Target);
 }
 
-void AMMOPlayerController::ClearSelection()
-{
-	CurrentSelectedActor = nullptr;
-
-	if (SelectionCircle)
+void AMMOPlayerController::ClearSelection() {
+	if (CurrentSelectedActor && CurrentSelectedActor != CurrentHoverActor) 
 	{
-		SelectionCircle->DetachFromActor(
-			FDetachmentTransformRules::KeepWorldTransform);
-		SelectionCircle->SetActive(false);
+		if (ACharacter* Char = Cast<ACharacter>(CurrentSelectedActor)) 
+		{
+			if (AMMOPlayerCharacter* MMOPlayer = Cast<AMMOPlayerCharacter>(Char)) 
+			{ 
+				if (USkeletalMeshComponent* Overlay = MMOPlayer->GetHighlightMesh()) 
+				{ 
+					Overlay->SetCustomDepthStencilValue(0); 
+				} 
+			}
+			else if (AMMOMobCharacter* Mob = Cast<AMMOMobCharacter>(Char)) 
+			{ 
+				if (USkeletalMeshComponent* MobMesh = Mob->GetHighlightMesh()) 
+				{ 
+					MobMesh->SetCustomDepthStencilValue(0); 
+				} 
+			}
+		} 
+		else 
+		{ 
+			TArray<USkeletalMeshComponent*> Meshes; CurrentSelectedActor->GetComponents(Meshes); 
+			for (USkeletalMeshComponent* MeshComp : Meshes) 
+			{ 
+				if (MeshComp) 
+				{ 
+					MeshComp->SetRenderCustomDepth(false); 
+					MeshComp->SetCustomDepthStencilValue(0); 
+				} 
+			} 
+		}
 	}
+	CurrentSelectedActor = nullptr; if (SelectionCircle) { SelectionCircle->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform); SelectionCircle->SetActive(false); }
 }
 
 void AMMOPlayerController::ApplySelectionToActor(AActor* NewSelection)
@@ -613,7 +622,7 @@ void AMMOPlayerController::ApplySelectionToActor(AActor* NewSelection)
 
 	SelectionCircle->SetColor(Color);
 
-	// Attach circle to the selected actor’s root, sitting on the ground
+	// Attach circle to the selected actorï¿½s root, sitting on the ground
 	SelectionCircle->AttachToActor(
 		NewSelection,
 		FAttachmentTransformRules::KeepRelativeTransform);

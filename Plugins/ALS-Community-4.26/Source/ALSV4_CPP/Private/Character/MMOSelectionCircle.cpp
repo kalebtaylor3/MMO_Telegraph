@@ -14,12 +14,12 @@ AMMOSelectionCircle::AMMOSelectionCircle()
 	RootComponent = DecalComp;
 
 	// X = projection depth, Y/Z = width/height
-	DecalComp->DecalSize = FVector(32.f, 24.f, 24.f);
+	DecalComp->DecalSize = FVector(22.f, 60.f, 60.f);
 
 	// SUPER IMPORTANT: point decal DOWN onto the floor
 	DecalComp->SetRelativeRotation(FRotator(-90.f, 0.f, 0.f));
 
-	// Don’t fade with distance
+	// Donï¿½t fade with distance
 	DecalComp->SetFadeScreenSize(0.f);
 
 	// Start hidden
